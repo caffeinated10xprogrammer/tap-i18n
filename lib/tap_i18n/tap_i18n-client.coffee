@@ -44,18 +44,26 @@ _.extend TAPi18n.prototype,
     project_languages = @_getProjectLanguages()
 
     if languageTag in project_languages
+      # Put a tracker to indiate that we are loading this language so that _prepareLanguageSpecificTranslator won't load it again
+      if languageTag not of @_languageSpecificTranslatorsTrackers
+        @_languageSpecificTranslatorsTrackers[languageTag] = new Tracker.Dependency
+
       if languageTag not in @_loaded_languages
         loadLanguageTag = =>
           jqXHR = $.getJSON(@_getLanguageFilePath(languageTag))
 
           jqXHR.done (data) =>
             @_loadLangFileObject(languageTag, data)
-
             @_loaded_languages.push languageTag
+
+            # Upon load success, call _prepareLanguageSpecificTranslator to setup _languageSpecificTranslators and change the dependency.
+            @_prepareLanguageSpecificTranslator languageTag
 
             dfd.resolve()
 
           jqXHR.fail (xhr, error_code) =>
+            # Remove the tracker since we failed to load the language
+            delete @_languageSpecificTranslatorsTrackers[languageTag]
             dfd.reject("Couldn't load language '#{languageTag}' JSON: #{error_code}")
 
         directDependencyLanguageTag = if "-" in languageTag then languageTag.replace(/-.*/, "") else fallback_language
@@ -125,7 +133,7 @@ _.extend TAPi18n.prototype,
 
     @_languageSpecificTranslatorsTrackers[lang_tag] = new Tracker.Dependency
 
-    if not(lang_tag of @_languageSpecificTranslators)
+    if not (lang_tag of @_languageSpecificTranslators)
       dfd = @_loadLanguage(lang_tag)
         .done =>
           @_languageSpecificTranslators[lang_tag] = @_getSpecificLangTranslator(lang_tag)
